@@ -1,10 +1,8 @@
 {
   "name": "@magpie-community/page-codex-resets",
   "version": "0.1.0",
-  "description": "Codex reset announcements, community forecasts and credit grants in a separate Magpie page, with an explicit local sync command",
-  "files": ["page", "sync.mjs", "sync-core.mjs", "README.md"],
-  "bin": { "magpie-codex-resets": "./sync.mjs" },
-  "engines": { "node": ">=22" },
+  "description": "Codex reset announcements, community forecasts and credit grants; draft pending Magpie host-managed sync support",
+  "files": ["page", "sync-core.mjs", "README.md"],
   "keywords": ["magpie", "magpie-page", "codex", "reset"],
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/magpie-community/plugins.git", "directory": "packages/codex-resets" },

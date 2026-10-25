@@ -1,69 +1,74 @@
 # @magpie-community/page-codex-resets
 
-A separate **Codex reset news** page in [Magpie](https://usemagpie.ai), with global-reset announcements, community probability estimates and reset-credit grants. It follows Magpie's light/dark theme and keeps sources behind a disclosure. English, Simplified Chinese and Traditional Chinese are supported; other page languages fall back to English.
+**Draft — not ready for the plugin market.** Automatic updates depend on [Magpie host-managed sync support (#3609)](https://github.com/yetone/magpie/issues/3609), which is not implemented in the current host. Approval of the third-party data source is also pending in [plugins#338](https://github.com/magpie-community/plugins/pull/338). The market listing is withheld until both are resolved.
 
-**Live data requires an explicitly started local sync command.** Installing the package starts no process and sends no request. The page itself is offline and reads only its own options through Magpie's documented bridge. It adds no panel to Usage and replaces no built-in page.
+A separate Codex reset news page with global-reset announcements, community probability estimates and reset-credit grants. It preserves Magpie's light/dark theme and the three-column layout, with collapsible sources. The complete interface is available in English, Simplified Chinese, Traditional Chinese, Japanese and German. Source-provided wording is retained and labelled as such.
 
-## Try it from this repository
+## Architecture
 
-With Node 22+ (or Bun) and `magpie` on PATH, from a checkout of this repository:
+The intended production flow is:
+
+```text
+Magpie owns scheduling and plugin lifecycle
+  → permission-scoped public request
+  → sync-core.mjs validates and reduces the response
+  → host publishes this plugin's own snapshot
+  → sandboxed page reads the snapshot and renders it
+```
+
+`syncOnce({request, save, options, signal, now})` performs one bounded check. It requires an explicit transport and plugin-scoped publisher, keeps a five-minute minimum check deadline and `Retry-After`, and accepts cancellation before requesting or publishing. It starts no scheduler and has no default global fetch. A failed save propagates to the caller. These injected functions are **our internal module boundary, not a claimed Magpie API**.
+
+The future host adapter must supply the approved transport, isolated state and lifecycle: one in-flight job per plugin; persist backoff across restarts; stop/abort when disabled, removed or shut down; prevent stale publication and conflicting writes. The job should run on the Magpie host for both desktop and remote `magpie web`. See #3609 for acceptance criteria and its relationship to [page/backend RPC #3396](https://github.com/yetone/magpie/issues/3396).
+
+The current page only uses `magpie.ready`, theme events and `magpie.options.get()`. It declares no private reads, makes no requests and exposes no unsupported host methods. The current host does **not** invoke the sync module. The empty state explains that automatic updates are not available. Do not merge or publish this preview as a working live-data plugin.
+
+There is no shipped CLI, npm bin, terminal watcher, terminal bell, installation hook, daemon or OS scheduler. Desktop notifications and changes to the reset-card dialog remain out of scope. A new unexpired explicit announcement can be returned by the sync module as data; it does not send a notification.
+
+## Meaning of the information
+
+- Public announcements help users notice a possible upcoming reset before choosing to spend a saved credit. They offer no private or exclusive signal.
+- Global resets, community forecasts and credit grants are distinct. A grant adds resets to use later; it does not refill the current allowance. Missing probability is not 0%.
+- Scheduled announcements retain Tibo's original X URL. A vague announcement stays without an exact time. A community probability is interpretation, not an OpenAI commitment or advice to delay using a credit.
+- An announced time passing becomes **Awaiting confirmation**, not proof of completion. Eligibility and actual allowance belong to the user's account.
+- Failed, malformed or stale data is unavailable, never “no reset.” Snapshot freshness is 15 minutes; scheduled announcements older than 48 hours are treated as unverifiable; expired forecasts are omitted.
+- The page rereads its snapshot every 30 seconds while loaded. **Refresh page** rereads that snapshot and does not fetch a public service. Source addresses can be selected and copied because the current iframe sandbox forbids popups.
+
+## Source under review
+
+The prototype uses [Codex Resets](https://codex-resets.com) and its [public API](https://codex-resets.com/api/docs). The documentation allows keyless use with attribution. This permission does not settle whether Magpie should accept the service, its interpretations or its probability estimates. Attribution and original X addresses are retained; no website code or X scraping is included.
+
+The one required destination is **`https://codex-resets.com/api/v1/status`**, using GET, an eight-second timeout, no credentials, no redirects, and a 64 KiB body cap. Backoff respects `Retry-After` with a five-minute floor and 24-hour cap. Only required validated public fields are retained. No accounts, credentials, quotas or agent files are read.
+
+## Development and verification
+
+Install the local preview into a **dedicated sandbox HOME**, then seed fixture options through the official CLI or the browser test below. This is for reviewing the UI, not an end-user installation workflow:
 
 ```sh
 magpie plugin add ./packages/codex-resets
-node packages/codex-resets/sync.mjs          # one source check
-node packages/codex-resets/sync.mjs --watch --bell
 ```
 
-Open **Plugins → Codex reset news** in the sidebar. `--watch` stays in the foreground and checks at most every five minutes per sync process. `--bell` optionally rings the terminal bell for a new, unexpired, explicit global-reset announcement. Terminal bell behavior depends on your terminal. A forecast or credit grant never produces a reset alert. Use one sync process per Magpie installation.
+`dev/sync.mjs` is an optional single-request smoke helper for a developer's sandbox, excluded from the package. It explicitly supplies `fetch` and uses the official CLI to write only this plugin's options. It has no watch/bell mode. Do not run it as a background service or recommend it to marketplace users. Normal tests never contact the public service.
 
-Stop with **Ctrl-C**. No scheduler, launch agent or background service is installed. Turning off/removing the page in Magpie does not itself stop the separate command; stop that command too.
-
-To select a Magpie binary or an installed plugin by exact name/path:
+Run the repository checks in a temporary HOME so no real sign-in is touched:
 
 ```sh
-node packages/codex-resets/sync.mjs --magpie /path/to/magpie --plugin codex-resets --watch
+HOME=$(mktemp -d) bun test
+bun scripts/check.mjs
 ```
 
-After the package is listed, Magpie can install it with `magpie plugin add @magpie-community/page-codex-resets` (including its community dist fallback). The sync files are in that installed package. If it is also available on npm, its bin can be run with `npx --package @magpie-community/page-codex-resets magpie-codex-resets --watch --bell`. Availability on npm is separate from merging this package; the repository checkout commands above work during review.
+Focused tests cover parsing, source URLs, expiry, probability boundaries, failure/backoff, data minimization, cancellation, explicit transport, script/permission policy, complete translated messages and placeholder parity. Node can also run them with `node --test packages/codex-resets/*.test.mjs`.
 
-## What it can and cannot do
-
-- The three columns separate a global reset, a **community** forecast, and a credit grant. Missing probability is not 0%. Grants do not mean your current allowance was refilled.
-- An announced time passing becomes **Awaiting confirmation**, not proof that a reset happened. The source is community tracking, not an OpenAI guarantee or evidence about an individual account.
-- Missing, failed, malformed or stale source data shows **Current status is unavailable**. Data older than 15 minutes is not displayed as current. A scheduled announcement older than 48 hours is treated as unverifiable. An expired forecast is omitted.
-- The page rereads saved options every 30 seconds while loaded. **Refresh page** rereads those options; it does not fetch the public service.
-- Source addresses are selectable for copying into a browser. The host's page sandbox does not permit popups. The attribution link selects the website address instead of attempting a blocked navigation.
-- The current page bridge has no network, desktop-notification or reset-card interception API. This version provides an in-page advisory and optional terminal bell; it cannot warn in Magpie's manual reset dialog or send desktop notifications.
-
-## Data and permissions
-
-Data from [Codex Resets](https://codex-resets.com), using its [public API](https://codex-resets.com/api/docs). Its documentation allows free, keyless use with attribution. The page retains the attribution and original X post addresses. No website code or X scraping is included.
-
-The explicit helper makes a GET to **`https://codex-resets.com/api/v1/status`**, with an eight-second timeout, no credentials, no redirect following and a 64 KiB body limit. It honors `Retry-After` (five-minute floor, 24-hour cap). Only the validated public fields needed by the page are retained.
-
-The helper invokes `magpie plugin options codex-resets` to read this plugin's options and to save its public snapshot, check deadline and up to 64 announcement IDs for deduplication. It preserves unrelated keys in those options and uses argument arrays, not a shell. It never reads Magpie's account, credential, quota or agent files. The page declares **no read permissions**, and never calls the host's private APIs, reaches out to a network or writes options.
-
-## Testing
-
-Like this repository's other tests, run in a temporary HOME so no real sign-in is touched:
-
-```sh
-HOME=$(mktemp -d) bun test packages/codex-resets packages/usage
-bun scripts/check.mjs codex-resets
-```
-
-The normal suite checks public parsing, source URLs, expiry, probability boundaries, failure/cooldown behavior, notice deduplication, CLI parsing, page permissions, script policy and translations. It signs in to nothing and never contacts the public service.
-
-`browser.test.mjs` is an optional integration test against a **separately running, isolated** `magpie web` and a development installation of Playwright. It is skipped by the normal unit suite. Set these before running `node --test packages/codex-resets/browser.test.mjs`:
+`browser.test.mjs` is optional and uses a **separately running, isolated** Magpie web and development Playwright. Set:
 
 - `MAGPIE_UI_TEST=1`.
-- `HOME` and `MAGPIE_TEST_HOME` to the same dedicated directory containing `sandbox` in its name; also isolate `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` there. Install this local package into that Magpie first.
-- Configure the sandbox's gateway on an unused port, then run its `magpie web --addr 127.0.0.1:<unused-web-port> --no-open`. Do not point the test at your everyday Magpie.
-- `MAGPIE_TEST_URL` to that localhost web link, including its test key; `MAGPIE_TEST_BIN` to the tested binary.
-- `PLAYWRIGHT_MODULE` to the development Playwright `index.mjs`, and `PLAYWRIGHT_BROWSERS_PATH` if browsers are stored outside the sandbox.
-- Optionally `MAGPIE_TEST_ENGINES=chromium,webkit`; the default is Chromium. The tested Magpie web host emits scheme-less CSP sources which Playwright WebKit rejects before loading any plugin scripts. This host compatibility issue is not bypassed by the test.
-- Optionally `MAGPIE_SCREENSHOTS` to a directory for the six Chromium screenshots.
+- `HOME` and `MAGPIE_TEST_HOME` to the same dedicated directory containing `sandbox` in its name; isolate `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` there too. Install this preview into that Magpie.
+- Configure its gateway on an unused port and run `magpie web --addr 127.0.0.1:<unused-web-port> --no-open`. Never target everyday Magpie.
+- `MAGPIE_TEST_URL` to the localhost link including its test key; `MAGPIE_TEST_BIN` to the tested binary.
+- `PLAYWRIGHT_MODULE` to Playwright's development `index.mjs`; `PLAYWRIGHT_BROWSERS_PATH` if its browsers are outside the sandbox.
+- Optionally `MAGPIE_TEST_CHROMIUM_CHANNEL=chrome` to use installed Chrome with a fresh temporary browser profile; the default uses Playwright's bundled Chromium.
+- Optionally `MAGPIE_TEST_ENGINES=chromium,webkit` (default Chromium). The tested host's scheme-less CSP sources are rejected by Playwright WebKit before scripts load; the test does not bypass that host limitation.
+- Optionally `MAGPIE_SCREENSHOTS` for rendered previews.
 
-The test temporarily changes only the sandbox's language/theme and this plugin's options, restoring both afterward. It uses fictional October 23, 2026 data, including a sample 75% forecast, and checks each selected engine at 1100, 760 and 420 pixels in both themes. The screenshots are illustrative, not live announcements.
+Run `node --test packages/codex-resets/browser.test.mjs`. It restores the sandbox settings/options and checks all five languages, light/dark, 1100/760/420px, source selection, refresh, zero probability and unavailable/empty states. Fixtures and screenshots use fictional October 23, 2026 data, including 75%; they are not live forecasts.
 
-中文：这是独立社区页面插件，需主动运行附带的本地同步命令。默认不联网、不启动后台服务、不读取账户。页面分别显示全局重置预告、社区概率与发卡信息；提醒仅限页面和可选终端响铃，不修改本体用卡弹窗。停止同步请退出命令（Ctrl-C）。
+中文：此版本仍为草稿，等待 Magpie 提供官方后台同步能力及维护者批准数据源，暂不上架。目标是启用插件后由 Magpie 自动同步，无需终端；本次仅完成同步模块边界、取消处理、页面及五种语言，尚未接入不存在的宿主接口。

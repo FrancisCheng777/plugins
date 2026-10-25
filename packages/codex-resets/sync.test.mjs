@@ -4,7 +4,7 @@ import { syncOnce } from './sync-core.mjs';
 const now = Date.parse('2026-10-23T08:00:00Z');
 const payload = () => ({ meta: { api_version: 'v1', generated_at: new Date(now).toISOString() },
   data: { scheduled_reset: null, latest_reset: null, active_watch: null } });
-test('explicit sync fetches only the public endpoint and publishes into this plugin options', async () => {
+test('one check uses only the public endpoint and publishes into this plugin options', async () => {
   let saved, requests = [];
   const result = await syncOnce({ now, options: { custom: 'kept' },
     request: async (url, init) => { requests.push([url, init]); return new Response(JSON.stringify(payload())); },
@@ -45,7 +45,7 @@ test('network failure is visible and failed publication is not reported as a suc
   assert.ok(r.error); assert.ok(saved.codexResets.error);
   await assert.rejects(() => syncOnce({ now, request: async () => new Response(JSON.stringify(payload())), save: () => { throw new Error('cannot save'); } }), /cannot save/);
 });
-test('only a new explicit reset announcement produces a terminal notice; forecasts and grants do not', async () => {
+test('only a new explicit reset announcement returns notice data; forecasts and grants do not', async () => {
   const f = payload();
   f.data.scheduled_reset = { id: '123', reset_type: 'regular', status: 'scheduled', announced_at: '2026-10-23T07:00:00Z', scheduled_for: '2026-10-23T10:00:00Z', source: { type: 'x_post', author: 'thsottiaux', url: 'https://x.com/thsottiaux/status/123' } };
   let saved;
@@ -62,4 +62,34 @@ test('extra response fields are not persisted', async () => {
   await syncOnce({ now, request: async () => new Response(JSON.stringify(f)), save: o => { saved = o; } });
   assert.deepEqual(Object.keys(saved.codexResets.payload).sort(), ['data', 'meta']);
   assert.equal(saved.codexResets.payload.data.extra, undefined);
+});
+
+test('sync requires an explicit transport instead of silently using global fetch', async () => {
+  const previous = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response(JSON.stringify(payload())); };
+  try {
+    await assert.rejects(() => syncOnce({ now, save: () => {} }), /transport/i);
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = previous; }
+});
+
+test('stopping a host job prevents a late response from publishing', async () => {
+  const stop = new AbortController();
+  let published = false;
+  await assert.rejects(() => syncOnce({ now, signal: stop.signal,
+    request: async () => { stop.abort(); return new Response(JSON.stringify(payload())); },
+    save: () => { published = true; },
+  }), { name: 'AbortError' });
+  assert.equal(published, false);
+});
+
+test('a stopped job does not contact its source', async () => {
+  const stop = new AbortController(); stop.abort();
+  let calls = 0;
+  await assert.rejects(() => syncOnce({ now, signal: stop.signal,
+    request: async () => { calls++; return new Response(JSON.stringify(payload())); },
+    save: () => assert.fail('stopped job must not publish'),
+  }), { name: 'AbortError' });
+  assert.equal(calls, 0);
 });

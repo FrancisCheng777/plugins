@@ -37,7 +37,13 @@ function compact(payload) {
     },
   };
 }
-export async function syncOnce({ now = Date.now(), options = {}, request = fetch, save, signal }) {
+// One bounded check. Scheduling, transport and plugin-scoped publication are
+// supplied by the caller; importing this module starts no process or request.
+// The Magpie host adapter is pending yetone/magpie#3609.
+export async function syncOnce({ now = Date.now(), options = {}, request, save, signal }) {
+  if (typeof request !== 'function') throw new TypeError('An explicit transport is required');
+  if (typeof save !== 'function') throw new TypeError('Plugin-scoped publication is required');
+  signal?.throwIfAborted();
   const prior = options.codexResets;
   const next = Date.parse(prior?.nextCheckAt);
   if (Number.isFinite(next) && next > now && next - now <= MAX_RETRY) return { changed: false, nextCheckAt: next };
@@ -67,6 +73,7 @@ export async function syncOnce({ now = Date.now(), options = {}, request = fetch
   }
   const record = { version: 1, checkedAt, nextCheckAt: new Date(now + delay).toISOString(), payload, error, notified: notified.slice(-64) };
   // A failed save must surface to the caller. Do not report a published update.
+  signal?.throwIfAborted();
   await save({ ...options, codexResets: record });
   return { changed: true, nextCheckAt: now + delay, error, notice };
 }

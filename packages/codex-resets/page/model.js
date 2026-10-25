@@ -1,4 +1,4 @@
-// Port of the prototype's public-data rules. Both the page and sync command
+// Port of the prototype's public-data rules. Both the page and sync module
 // validate data; a saved option or source response never becomes executable HTML.
 (function (root) {
   'use strict';

@@ -31,7 +31,15 @@ test('all supported page languages have the same complete message set', () => {
   for (const lang of ['zh', 'zh-CN', 'zh-TW', 'en', 'ja', 'de']) {
     const words = scope.CodexResetWords(lang);
     assert.deepEqual(Object.keys(words).sort(), keys);
-    for (const value of Object.values(words)) assert.equal(typeof value, 'string');
+    for (const key of keys) {
+      assert.equal(typeof words[key], 'string');
+      assert.ok(words[key].trim(), `${lang}: empty ${key}`);
+      assert.deepEqual([...words[key].matchAll(/\{\w+\}/g)].map(m => m[0]).sort(),
+        [...en[key].matchAll(/\{\w+\}/g)].map(m => m[0]).sort(), `${lang}: placeholders in ${key}`);
+      if (lang === 'ja' || lang === 'de') assert.notEqual(words[key], en[key], `${lang}: untranslated ${key}`);
+    }
   }
+  assert.equal(scope.CodexResetWords('ja-JP').title, scope.CodexResetWords('ja').title);
+  assert.equal(scope.CodexResetWords('de-DE').title, scope.CodexResetWords('de').title);
   for (const key of [...read('index.html').matchAll(/data-t="([^"]+)"/g)].map(m => m[1])) assert.ok(en[key], key);
 });

@@ -1,11 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { args, parseOptions } from './sync.mjs';
+import { args, parseOptions } from './dev/sync.mjs';
 test('only explicit flags are accepted and no scheduler is installed', () => {
-  assert.deepEqual(args([]), { watch: false, bell: false, magpie: 'magpie', plugin: 'codex-resets' });
-  assert.equal(args(['--watch', '--bell']).watch, true);
+  assert.deepEqual(args([]), { magpie: 'magpie', plugin: 'codex-resets' });
   assert.equal(args(['--magpie', '/path with spaces/magpie']).magpie, '/path with spaces/magpie');
-  for (const a of [['--magpie'], ['--plugin', '--watch'], ['--endpoint', 'https://other.test']]) assert.throws(() => args(a));
+  for (const a of [['--watch'], ['--bell'], ['--magpie'], ['--plugin', '--watch'], ['--endpoint', 'https://other.test']]) assert.throws(() => args(a));
 });
 test('official CLI options output is parsed without guessing arbitrary log text', () => {
   assert.deepEqual(parseOptions('No options set.'), {});
