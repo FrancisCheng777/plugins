@@ -27,7 +27,7 @@ test('a credit grant is not a global reset announcement', () => {
 });
 export { NOW, fixture };
 
-test('unknown, stale, failed and future-dated saved data never shows a current prediction', () => {
+test('unknown, stale, failed and future-dated saved data never shows current announcements', () => {
   assert.equal(M.view(null, NOW).state, 'empty');
   const record = { version: 1, checkedAt: new Date(NOW).toISOString(), payload: fixture() };
   assert.equal(M.view(record, NOW).state, 'ready');
@@ -40,30 +40,27 @@ test('unknown, stale, failed and future-dated saved data never shows a current p
   assert.equal(M.view(record, NOW + M.FRESH + 1).state, 'unavailable');
 });
 
-test('a probability of zero differs from an absent probability; expired forecasts disappear', () => {
-  const f = fixture();
-  f.data.active_watch = { level: 'strong', observed_at: '2026-10-23T07:55:00Z', expires_at: '2026-10-23T10:00:00Z', source: { type: 'observed' } };
-  assert.equal(M.parse(f, NOW).forecast.percent, null);
-  f.data.active_watch.reset_chance_percent = 0;
-  assert.equal(M.parse(f, NOW).forecast.percent, 0);
-  for (const n of [-1, 101, '75', 12.5]) {
-    f.data.active_watch.reset_chance_percent = n;
-    assert.throws(() => M.parse(f, NOW));
+test('forecasts in old snapshots are ignored, including malformed or absent forecast fields', () => {
+  for (const watch of [undefined, null, { reset_chance_percent: 75 }, 'invalid']) {
+    const f = fixture();
+    if (watch === undefined) delete f.data.active_watch;
+    else f.data.active_watch = watch;
+    const result = M.parse(f, NOW);
+    assert.ok(result.announcement);
+    assert.equal(Object.hasOwn(result, 'forecast'), false);
+    assert.equal(Object.hasOwn(M.view({ version: 1, checkedAt: new Date(NOW).toISOString(), payload: f }, NOW), 'forecast'), false);
   }
-  f.data.active_watch.reset_chance_percent = 75;
-  f.data.active_watch.expires_at = '2026-10-23T08:00:00Z';
-  assert.equal(M.parse(f, NOW).forecast, null);
 });
 
 test('missing fields and stale upstream responses are errors, not no-announcement results', () => {
-  for (const field of ['scheduled_reset', 'latest_reset', 'active_watch']) {
+  for (const field of ['scheduled_reset', 'latest_reset']) {
     const f = fixture(); delete f.data[field]; assert.throws(() => M.parse(f, NOW));
   }
   for (const generated of ['garbage', '2026-10-23T07:44:59Z', '2026-10-23T08:06:00Z', '2026-10-23T08:00:00']) {
     const f = fixture(); f.meta.generated_at = generated; assert.throws(() => M.parse(f, NOW));
   }
   const f = fixture(); f.data.scheduled_reset = null;
-  assert.deepEqual(M.parse(f, NOW), { announcement: null, grant: null, forecast: null, latest: null });
+  assert.deepEqual(M.parse(f, NOW), { announcement: null, grant: null, latest: null });
 });
 
 test('source validation rejects spoofed authors, destinations and mismatched IDs', () => {

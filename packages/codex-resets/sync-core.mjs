@@ -33,11 +33,10 @@ function compact(payload) {
     data: {
       scheduled_reset: event(payload.data.scheduled_reset, ['id', 'status', 'reset_type', 'announced_at', 'scheduled_for']),
       latest_reset: event(payload.data.latest_reset, ['id', 'reset_type', 'announced_at']),
-      active_watch: event(payload.data.active_watch, ['level', 'reset_chance_percent', 'forecast_window', 'observed_at', 'expires_at']),
     },
   };
 }
-// One bounded check. Scheduling, transport and plugin-scoped publication are
+// One bounded check. Page-lifetime coordination, transport and plugin-scoped publication are
 // supplied by the caller; importing this module starts no process or request.
 // The Magpie host adapter is pending yetone/magpie#3609.
 export async function syncOnce({ now = Date.now(), options = {}, request, save, signal }) {
@@ -68,7 +67,7 @@ export async function syncOnce({ now = Date.now(), options = {}, request, save, 
     }
   } catch (e) {
     if (signal?.aborted) throw e;
-    // Do not display an old forecast while the source cannot be verified.
+    // Do not display old announcements while the source cannot be verified.
     error = 'Public status could not be verified. Check the source and try again later.';
   }
   const record = { version: 1, checkedAt, nextCheckAt: new Date(now + delay).toISOString(), payload, error, notified: notified.slice(-64) };

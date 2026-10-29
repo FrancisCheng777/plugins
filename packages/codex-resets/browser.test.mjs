@@ -75,7 +75,11 @@ test('real Magpie page: light/dark, responsive, sources, failure and empty state
           }
           await page.locator('button[data-view="plugin-codex-resets"].on').waitFor();
           await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
-          assert.equal(await frame.locator('#forecastValue').textContent(), '75%');
+          // A host update can show release notes in this isolated profile.
+          const releaseNotes = page.locator('#modal .whatsnew');
+          if (await releaseNotes.isVisible()) await releaseNotes.locator('.bar button.primary').click();
+          assert.equal(await frame.locator('.metric').count(), 2);
+          assert.doesNotMatch(await frame.locator('body').innerText(), /75%|Next 24 hours/);
           assert.equal(await frame.locator('h1').textContent(), words[0]);
           assert.equal(await frame.locator('#resetValue').textContent(), new Intl.DateTimeFormat(lang === 'zh' ? 'zh-CN' : lang,
             { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' }).format(new Date('2026-10-23T10:00:00Z')));
@@ -91,9 +95,6 @@ test('real Magpie page: light/dark, responsive, sources, failure and empty state
           assert.equal(await frame.locator('#sourceReset').evaluate(el => el.selectionEnd - el.selectionStart), 'https://x.com/thsottiaux/status/123456789'.length);
           await click('#reload');
           assert.ok(await frame.locator('#details').evaluate(el => el.open), 'refresh keeps disclosure open');
-          const zero = structuredClone(record); zero.payload.data.active_watch.reset_chance_percent = 0;
-          await options({ codexResets: zero }); await click('#reload');
-          await page.frames().find(f => f.url().includes('/_magpie/plugin/')).waitForFunction(() => document.getElementById('forecastValue').textContent === '0%');
           await options({ codexResets: { ...record, error: 'offline' } }); await click('#reload');
           await page.frames().find(f => f.url().includes('/_magpie/plugin/')).waitForFunction(text => document.getElementById('emptyTitle').textContent === text, words[2]);
           assert.equal(await frame.locator('#overview').isVisible(), false);

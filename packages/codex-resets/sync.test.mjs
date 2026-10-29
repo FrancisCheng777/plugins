@@ -45,7 +45,7 @@ test('network failure is visible and failed publication is not reported as a suc
   assert.ok(r.error); assert.ok(saved.codexResets.error);
   await assert.rejects(() => syncOnce({ now, request: async () => new Response(JSON.stringify(payload())), save: () => { throw new Error('cannot save'); } }), /cannot save/);
 });
-test('only a new explicit reset announcement returns notice data; forecasts and grants do not', async () => {
+test('only a new explicit reset announcement returns notice data; grants do not', async () => {
   const f = payload();
   f.data.scheduled_reset = { id: '123', reset_type: 'regular', status: 'scheduled', announced_at: '2026-10-23T07:00:00Z', scheduled_for: '2026-10-23T10:00:00Z', source: { type: 'x_post', author: 'thsottiaux', url: 'https://x.com/thsottiaux/status/123' } };
   let saved;
@@ -74,7 +74,7 @@ test('sync requires an explicit transport instead of silently using global fetch
   } finally { globalThis.fetch = previous; }
 });
 
-test('stopping a host job prevents a late response from publishing', async () => {
+test('cancelling a page request prevents a late response from publishing', async () => {
   const stop = new AbortController();
   let published = false;
   await assert.rejects(() => syncOnce({ now, signal: stop.signal,
@@ -84,12 +84,21 @@ test('stopping a host job prevents a late response from publishing', async () =>
   assert.equal(published, false);
 });
 
-test('a stopped job does not contact its source', async () => {
+test('a cancelled request does not contact its source', async () => {
   const stop = new AbortController(); stop.abort();
   let calls = 0;
   await assert.rejects(() => syncOnce({ now, signal: stop.signal,
     request: async () => { calls++; return new Response(JSON.stringify(payload())); },
-    save: () => assert.fail('stopped job must not publish'),
+    save: () => assert.fail('cancelled request must not publish'),
   }), { name: 'AbortError' });
   assert.equal(calls, 0);
+});
+
+test('publication strips forecasts even when upstream prediction data is malformed', async () => {
+  for (const watch of [{ reset_chance_percent: 75 }, 'invalid', null]) {
+    const f = payload(); f.data.active_watch = watch; let saved;
+    const result = await syncOnce({ now, request: async () => new Response(JSON.stringify(f)), save: o => { saved = o; } });
+    assert.equal(result.error, '');
+    assert.deepEqual(Object.keys(saved.codexResets.payload.data).sort(), ['latest_reset', 'scheduled_reset']);
+  }
 });

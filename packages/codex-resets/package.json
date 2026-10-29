@@ -1,7 +1,7 @@
 {
   "name": "@magpie-community/page-codex-resets",
   "version": "0.1.0",
-  "description": "Codex reset announcements, community forecasts and credit grants; draft pending Magpie host-managed sync support",
+  "description": "Codex reset announcements and credit grants; draft pending Magpie page-open controlled networking",
   "files": ["page", "sync-core.mjs", "README.md"],
   "keywords": ["magpie", "magpie-page", "codex", "reset"],
   "license": "MIT",

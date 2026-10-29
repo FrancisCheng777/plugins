@@ -28,8 +28,8 @@
     const generated = time(wire.meta.generated_at);
     if (now - generated > FRESH || generated - now > SKEW) fail();
     const d = wire.data;
-    if (!['scheduled_reset', 'latest_reset', 'active_watch'].every(k => own(d, k))) fail();
-    const out = { announcement: null, grant: null, forecast: null, latest: null };
+    if (!['scheduled_reset', 'latest_reset'].every(k => own(d, k))) fail();
+    const out = { announcement: null, grant: null, latest: null };
     if (d.scheduled_reset !== null) {
       const a = d.scheduled_reset;
       if (!object(a) || a.status !== 'scheduled' || !['regular', 'banked'].includes(a.reset_type)
@@ -52,19 +52,10 @@
       if (at > now + SKEW) fail();
       out.latest = { type: e.reset_type, at: new Date(at).toISOString(), url: source(e.source) };
     }
-    if (d.active_watch !== null) {
-      const w = d.active_watch;
-      if (!object(w) || !['strong', 'elevated'].includes(w.level)) fail();
-      const percent = w.reset_chance_percent ?? null;
-      if (percent !== null && (!Number.isInteger(percent) || percent < 0 || percent > 100)) fail();
-      const observed = time(w.observed_at), expires = time(w.expires_at), url = source(w.source);
-      if (observed > now + SKEW || expires <= observed || (w.forecast_window != null && (typeof w.forecast_window !== 'string' || w.forecast_window.length > 160))) fail();
-      if (expires > now) out.forecast = { percent, window: w.forecast_window || '', expiresAt: new Date(expires).toISOString(), url };
-    }
     return out;
   }
   function view(record, now = Date.now()) {
-    const unknown = { state: 'unavailable', announcement: null, grant: null, forecast: null, latest: null, checkedAt: null };
+    const unknown = { state: 'unavailable', announcement: null, grant: null, latest: null, checkedAt: null };
     if (!record) return { ...unknown, state: 'empty' };
     try {
       const checked = time(record.checkedAt);
